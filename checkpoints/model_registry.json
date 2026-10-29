@@ -1,0 +1,27 @@
+[
+  {
+    "version": "v1.1.0",
+    "promoted_at": "2026-10-29T17:29:55.333244",
+    "source_checkpoint": "checkpoints\\test_kaggle_t4_best.pt",
+    "archived_checkpoint": "best_multi_hazard_model_archived_20261029_172955.pt",
+    "metrics": {
+      "csi": 0.72,
+      "brier": 0.08,
+      "drought_rmse": 0.38,
+      "skill_score_vs_persistence": 0.4,
+      "gates_detail": {
+        "flood_csi_passed": true,
+        "flood_brier_passed": true,
+        "drought_rmse_passed": true,
+        "drought_skill_passed": true
+      },
+      "all_passed": true
+    },
+    "gates_enforced": {
+      "min_flood_csi": 0.5,
+      "max_flood_brier": 0.18,
+      "max_drought_rmse": 0.85,
+      "min_skill_score_persist": 0.0
+    }
+  }
+]

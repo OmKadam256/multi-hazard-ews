@@ -1,0 +1,129 @@
+# ==============================================================================
+# AI-Driven Multi-Hazard Early Warning & GeoIntelligence Platform (India)
+# Production Multi-Service Container Orchestration (Docker Compose)
+# Services: PostGIS Spatial DB + FastAPI GeoIntelligence API + Next.js UI
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. PostGIS Spatial Database Service (HydroSHEDS, Catchments & Telemetry)
+  # ----------------------------------------------------------------------------
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: eews-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-eews_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-eews_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - eews-network
+
+  # ----------------------------------------------------------------------------
+  # 2. FastAPI Multi-Hazard GeoIntelligence & XAI Inference Backend
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: eews-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - GEE_PROJECT=${GEE_PROJECT:-multi-hazard-eews}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-eews_db}
+      - CONFIG_PATH=/app/configs/config.yaml
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./checkpoints:/app/checkpoints:ro
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/data-quality || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - eews-network
+
+  # ----------------------------------------------------------------------------
+  # 3. Next.js 14 Early Warning Mission Control Dashboard
+  # ----------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: eews-dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    networks:
+      - eews-network
+
+  # ----------------------------------------------------------------------------
+  # 4. 6-Hour Operational Scheduler Daemon Service (Decoupled from Web API)
+  # ----------------------------------------------------------------------------
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: eews-scheduler
+    restart: unless-stopped
+    command: python -m scheduler.runner
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - GEE_PROJECT=${GEE_PROJECT:-multi-hazard-eews}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-eews_db}
+      - EEWS_ADMIN_KEY=${EEWS_ADMIN_KEY:-eews-super-secret-admin-key}
+      - CONFIG_PATH=/app/configs/config.yaml
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./checkpoints:/app/checkpoints:ro
+      - ./data:/app/data:ro
+    networks:
+      - eews-network
+
+# ------------------------------------------------------------------------------
+# Persistent Spatial Storage Volumes & Bridge Network
+# ------------------------------------------------------------------------------
+volumes:
+  postgis_data:
+    name: eews_postgis_data
+
+networks:
+  eews-network:
+    name: eews_network
+    driver: bridge

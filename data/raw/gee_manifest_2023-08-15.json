@@ -1,0 +1,68 @@
+{
+  "forecast_issue_time": "2023-08-15T00:00:00",
+  "temporal_window": {
+    "start": "2023-07-16T00:00:00",
+    "end": "2023-08-14T23:59:59",
+    "lookback_days": 30
+  },
+  "spatial_bounds": {
+    "min_x": 200000.0,
+    "min_y": 1800000.0,
+    "max_x": 392000.0,
+    "max_y": 1992000.0
+  },
+  "target_crs": "EPSG:32644",
+  "target_resolution_m": 1000,
+  "collections": {
+    "sentinel1_sar": {
+      "collection": "COPERNICUS/S1_GRD",
+      "filter": {
+        "instrumentMode": "IW",
+        "polarization": [
+          "VV",
+          "VH"
+        ],
+        "orbitProperties_pass": "DESCENDING"
+      },
+      "temporal_filter": [
+        "2023-07-16T00:00:00",
+        "2023-08-14T23:59:59"
+      ],
+      "notes": "Acquisitions strictly prior to t. No post-flood extent used as feature."
+    },
+    "chirps_precipitation": {
+      "collection": "UCSB-CHG/CHIRPS/DAILY",
+      "band": "precipitation",
+      "temporal_filter": [
+        "2023-07-16T00:00:00",
+        "2023-08-14T23:59:59"
+      ]
+    },
+    "era5_land": {
+      "collection": "ECMWF/ERA5_LAND/HOURLY",
+      "bands": [
+        "temperature_2m",
+        "volumetric_soil_water_layer_1",
+        "volumetric_soil_water_layer_2",
+        "total_evaporation"
+      ],
+      "temporal_filter": [
+        "2023-07-16T00:00:00",
+        "2023-08-14T23:59:59"
+      ]
+    },
+    "static_dem": {
+      "collection": "COPERNICUS/DEM/GLO30",
+      "band": "DEM"
+    },
+    "soilgrids": {
+      "clay": "projects/soilgrids-isric/clay_mean",
+      "sand": "projects/soilgrids-isric/sand_mean",
+      "bdod": "projects/soilgrids-isric/bdod_mean"
+    },
+    "hydrosheds": {
+      "basins": "WWF/HydroSHEDS/v1/Basins/hybas_7",
+      "flow_accumulation": "WWF/HydroSHEDS/03ACC"
+    }
+  }
+}

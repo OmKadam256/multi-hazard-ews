@@ -1,0 +1,189 @@
+# ==============================================================================
+# AI-Driven Multi-Hazard Early Warning System (Flood + Drought)
+# Master Configuration & Hyperparameters
+# Hardware Target: Dual Kaggle GPU T4 Accelerators (DataParallel / DDP)
+# ==============================================================================
+
+system:
+  project_name: "multi-hazard-eews"
+  gee_project: "multi-hazard-eews"
+  version: "1.0.0"
+  random_seed: 42
+  num_workers: 4
+  device: "cuda" # Automatically falls back to 'cpu' or scales to dual T4 via DataParallel
+  mixed_precision: true # FP16 AMP for T4 Tensor Cores
+
+geospatial:
+  target_crs: "EPSG:32644" # UTM Zone 44N (e.g., Godavari / Krishna Basin or similar pilot area)
+  analysis_resolution_m: 1000 # 1 km standard analysis grid
+  patch_size: 32 # 32x32 km spatial patch window for CNN & spatial encoders
+  stride: 16 # Overlapping spatial window stride during inference tiling
+  nodata_value: -9999.0
+  bounding_box: # [min_x, min_y, max_x, max_y] in UTM meters
+    min_x: 200000.0
+    min_y: 1800000.0
+    max_x: 392000.0 # 192 km width (6 patches of 32km)
+    max_y: 1992000.0 # 192 km height (6 patches of 32km)
+
+data:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  labels_dir: "data/labels"
+  
+  # Temporal Split Windows (Strict No-Leakage Temporal Separation)
+  temporal_split:
+    train_start: "2016-01-01"
+    train_end: "2020-12-31"
+    val_start: "2021-01-01"
+    val_end: "2021-12-31"
+    test_start: "2022-01-01"
+    test_end: "2023-12-31"
+
+  # Spatial Split (Leave-Sub-Basin-Out via HydroSHEDS)
+  spatial_split:
+    basin_attribute: "HYBAS_ID"
+    train_basins: [406001, 406002, 406003, 406004, 406005, 406006]
+    val_basins: [406007, 406008]
+    test_basins: [406009, 406010]
+
+  # Input Layer Harmonization Specifications
+  static_layers:
+    - name: "dem"
+      source: "Copernicus_GLO_30m"
+      resample_method: "bilinear_downscale"
+    - name: "slope"
+      derived_from: "dem"
+    - name: "twi"
+      derived_from: ["dem", "flow_acc"]
+    - name: "flow_acc"
+      source: "HydroSHEDS_ACC"
+      resample_method: "sum_or_max"
+    - name: "soil_clay"
+      source: "SoilGrids_250m"
+      resample_method: "bilinear_downscale"
+    - name: "soil_sand"
+      source: "SoilGrids_250m"
+      resample_method: "bilinear_downscale"
+    - name: "soil_bulk_density"
+      source: "SoilGrids_250m"
+      resample_method: "bilinear_downscale"
+    - name: "distance_to_river"
+      derived_from: "flow_acc"
+
+  dynamic_layers:
+    - name: "chirps_rainfall"
+      source: "CHIRPS_0.05deg"
+      resample_method: "bilinear_upscale"
+      temporal_freq: "daily"
+    - name: "sentinel1_sar_vv"
+      source: "Sentinel_1_GRD_10m"
+      resample_method: "bilinear_downscale"
+      temporal_freq: "6_to_12_days"
+      leakage_guard: "strictly_pre_event"
+    - name: "sentinel1_sar_vh"
+      source: "Sentinel_1_GRD_10m"
+      resample_method: "bilinear_downscale"
+      temporal_freq: "6_to_12_days"
+      leakage_guard: "strictly_pre_event"
+    - name: "era5_soil_moisture"
+      source: "ERA5_Land_0.1deg"
+      resample_method: "bilinear_upscale"
+      temporal_freq: "daily"
+    - name: "era5_2m_temp"
+      source: "ERA5_Land_0.1deg"
+      resample_method: "bilinear_upscale"
+      temporal_freq: "daily"
+    - name: "era5_pet"
+      source: "ERA5_Land_0.1deg"
+      resample_method: "bilinear_upscale"
+      temporal_freq: "daily"
+    - name: "ndvi"
+      source: "MODIS_or_Sentinel2"
+      resample_method: "bilinear_downscale"
+      temporal_freq: "8_days"
+
+features:
+  temporal_sequence_length: 30 # 30 daily steps of history strictly before t
+  rainfall_windows: [3, 7, 15, 30] # Rolling antecedent rainfall windows
+  drought_indices:
+    spei_scales: [30, 90] # 1-month and 3-month scales
+    distribution: "log_logistic"
+  upstream_aggregation:
+    flow_acc_threshold: 500 # Cells considered upstream hydrologic conduits
+
+models:
+  baseline_tabular:
+    logistic_regression:
+      max_iter: 1000
+      class_weight: "balanced"
+    random_forest:
+      n_estimators: 150
+      max_depth: 12
+      n_jobs: -1
+    xgboost:
+      n_estimators: 200
+      max_depth: 6
+      learning_rate: 0.05
+      scale_pos_weight: 8.0 # Addressing severe flood class imbalance
+      tree_method: "hist"
+
+  deep_learning:
+    spatial_encoder:
+      in_channels: 10 # Static topographical + instant soil layers
+      conv_channels: [32, 64, 128]
+      kernel_size: 3
+      dropout: 0.2
+    temporal_encoder:
+      in_channels: 6 # Dynamic series (CHIRPS, SAR, SM, Temp, PET, NDVI)
+      hidden_dim: 64
+      num_layers: 2
+      cell_type: "GRU" # or "ConvGRU" for spatio-temporal patches
+      dropout: 0.2
+    fusion:
+      type: "gated_cross_modal" # Options: "concatenation", "gated_cross_modal"
+      fusion_dim: 128
+    multitask_heads:
+      flood_head:
+        hidden_dims: [64, 32]
+        output_dim: 1 # Binary flood occurrence probability (pixel-wise or patch-level)
+      drought_head:
+        hidden_dims: [64, 32]
+        continuous_dim: 1 # SPEI continuous value
+        classification_dim: 5 # [Normal, Mild, Moderate, Severe, Extreme]
+
+training:
+  batch_size: 32 # Optimized for dual T4 16GB VRAM per GPU
+  learning_rate: 0.0003
+  weight_decay: 0.00001
+  epochs: 50
+  early_stopping_patience: 10
+  lr_scheduler: "CosineAnnealingWarmRestarts"
+  loss_weights:
+    flood_focal: 1.0 # Focal Loss for extreme class imbalance (gamma=2.0, alpha=0.75)
+    drought_huber: 0.5 # Smooth L1 / Huber for continuous SPEI
+    drought_ce: 0.3 # CrossEntropy for discrete drought classes
+
+risk_engine:
+  flood_thresholds:
+    low: 0.20
+    moderate: 0.45
+    high: 0.70
+    critical: 0.85
+  hysteresis_margin: 0.05 # Prevent alarm flickering on borderline probabilities
+  persistence_timesteps_required: 2 # Must exceed threshold for N steps for alert escalation
+  drought_spei_thresholds:
+    mild: -0.5
+    moderate: -1.0
+    severe: -1.5
+    extreme: -2.0
+
+database:
+  db_type: "postgis"
+  connection_url: "postgresql://postgres:postgres@localhost:5432/multi_hazard_db"
+  mock_mode_fallback: true # Uses SQLite + Spatial GeoJSON fallback when PostgreSQL is not live
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins: ["http://localhost:3000"]

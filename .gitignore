@@ -1,0 +1,42 @@
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+*.venv
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js & Next.js Build Artifacts
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+dashboard/.env*.local
+dashboard/npm-debug.log*
+dashboard/yarn-debug.log*
+dashboard/yarn-error.log*
+
+# Environment & Sensitive Keys
+.env
+.env.*
+!.env.example
+
+# Temporary Test Checkpoints & Logs
+*.log
+checkpoints/test_*.pt
+checkpoints/archive/
+
+# OS Specific
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+

@@ -1,0 +1,117 @@
+{
+  "project_name": "AI-Driven Multi-Hazard Early Warning Platform (India)",
+  "version": "1.4.0",
+  "spatial_domain": {
+    "name": "Continental India Multi-Basin Grid",
+    "bounding_box": [68.1, 6.7, 97.4, 37.1],
+    "target_crs": "EPSG:32644",
+    "analysis_resolution_m": 1000,
+    "grid_shape": [3040, 2930],
+    "major_basins_covered": [
+      "Ganga", "Brahmaputra", "Indus", "Godavari", "Krishna",
+      "Mahanadi", "Narmada", "Tapi", "Cauvery", "Pennar",
+      "Sabarmati", "Mahi"
+    ],
+    "total_sub_basins_count": 846
+  },
+  "temporal_domain": {
+    "start_date": "2016-01-01",
+    "end_date": "2023-12-31",
+    "total_days": 2922,
+    "splits": {
+      "train": {
+        "start": "2016-01-01",
+        "end": "2021-12-31",
+        "duration_years": 6,
+        "sample_count": 18450,
+        "purpose": "Model optimization with homoscedastic uncertainty loss"
+      },
+      "validation": {
+        "start": "2022-01-01",
+        "end": "2022-12-31",
+        "duration_years": 1,
+        "sample_count": 3120,
+        "purpose": "Hyperparameter tuning, early stopping & isotonic calibration"
+      },
+      "test": {
+        "start": "2023-01-01",
+        "end": "2023-12-31",
+        "duration_years": 1,
+        "sample_count": 3150,
+        "purpose": "Final benchmark scorecards against 5 baseline models"
+      }
+    }
+  },
+  "datasets": {
+    "chirps_precipitation": {
+      "collection_id": "UCSB-CHG/CHIRPS/DAILY",
+      "provider": "Climate Hazards Center / USGS",
+      "license": "Public Domain (100% Free)",
+      "cadence": "Daily",
+      "bands": ["precipitation"],
+      "resolution_deg": 0.05,
+      "total_rasters": 2922,
+      "raw_size_gb": 8.4,
+      "zero_leakage_rule": "Observation timestamp must be strictly prior to forecast issue time t"
+    },
+    "sentinel1_sar": {
+      "collection_id": "COPERNICUS/S1_GRD",
+      "provider": "European Space Agency (ESA) Copernicus",
+      "license": "Open Access (CC-BY 4.0)",
+      "cadence": "6 to 12 days",
+      "bands": ["VV", "VH", "angle"],
+      "orbit_pass": "DESCENDING and ASCENDING",
+      "resampling": "Bilinear + Block-Max pooling for river channels",
+      "total_acquisitions": 6840,
+      "raw_size_gb": 12.8,
+      "zero_leakage_rule": "Only acquisitions before t. Post-event flood extent strictly forbidden as features"
+    },
+    "copernicus_dem": {
+      "collection_id": "COPERNICUS/DEM/GLO30",
+      "provider": "Copernicus Space Component Data Access",
+      "license": "Open Access",
+      "cadence": "Static",
+      "bands": ["DEM"],
+      "derived_layers": ["slope", "aspect", "topographic_wetness_index", "profile_curvature"],
+      "native_resolution_m": 30,
+      "raw_size_gb": 1.2
+    },
+    "modis_ndvi": {
+      "collection_id": "MODIS/061/MOD13Q1",
+      "provider": "NASA LP DAAC",
+      "license": "Public Domain",
+      "cadence": "16-day composite",
+      "bands": ["NDVI", "EVI", "DetailedQA"],
+      "native_resolution_m": 250,
+      "total_composites": 184,
+      "raw_size_gb": 2.2
+    },
+    "era5_land_soil_moisture": {
+      "collection_id": "ECMWF/ERA5_LAND/DAILY_RAW",
+      "provider": "ECMWF Copernicus Climate Change Service",
+      "license": "Open Access",
+      "cadence": "Daily",
+      "bands": [
+        "volumetric_soil_water_layer_1",
+        "volumetric_soil_water_layer_2",
+        "volumetric_soil_water_layer_3",
+        "volumetric_soil_water_layer_4",
+        "temperature_2m"
+      ],
+      "total_rasters": 2922,
+      "raw_size_gb": 4.8
+    },
+    "cwc_gauge_ground_truth": {
+      "source": "Central Water Commission (CWC) Water Resources Information System (India-WRIS)",
+      "license": "National Data Sharing & Accessibility Policy (NDSAP) Open",
+      "telemetry_stations_count": 84,
+      "attributes": ["water_level_m", "discharge_cumecs", "warning_level_m", "danger_level_m"],
+      "records_count": 245448
+    }
+  },
+  "storage_summary": {
+    "total_compressed_size_gb": 24.6,
+    "format": "Zarr chunks + Cloud-Optimized GeoTIFF (COG)",
+    "checksum_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

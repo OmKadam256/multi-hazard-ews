@@ -1,0 +1,47 @@
+# ==============================================================================
+# Production Dockerfile: FastAPI Multi-Hazard GeoIntelligence Service
+# ==============================================================================
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+# Install system geospatial and native dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    libgdal-dev \
+    gdal-bin \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy source code and configurations
+COPY configs/ ./configs/
+COPY api/ ./api/
+COPY models/ ./models/
+COPY preprocessing/ ./preprocessing/
+COPY features/ ./features/
+COPY risk_engine/ ./risk_engine/
+COPY evaluation/ ./evaluation/
+COPY checkpoints/ ./checkpoints/
+COPY data/ ./data/
+
+# Expose FastAPI port
+EXPOSE 8000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/data-quality || exit 1
+
+# Production server execution
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
